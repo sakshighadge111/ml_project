@@ -1,73 +1,149 @@
 # This file trains ML models and logs results to MLflow
 
-import pandas as pd  # data manipulation
-from sklearn.model_selection import train_test_split  # split data into train and test sets
-from sklearn.ensemble import RandomForestClassifier  # random forest model
-from xgboost import XGBClassifier  # xgboost model
-from sklearn.metrics import (
-    accuracy_score,    # overall accuracy
-    precision_score,   # precision score
-    recall_score,      # recall score
-    f1_score,          # f1 score
-    roc_auc_score      # roc auc score
-)
-import pickle  # save model to disk
-from dotenv import load_dotenv  # load env variables
-import os  # access env variables
-from preprocess import load_transformed_data, preprocess  # import preprocess functions
-from mlflow_tracker import log_run  # import mlflow logging function
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from xgboost import XGBClassifier
 
-load_dotenv()  # load .env file
+from sklearn.metrics import (
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    roc_auc_score
+)
+
+import pickle
+from dotenv import load_dotenv
+import os
+
+from preprocess import load_transformed_data, preprocess
+from mlflow_tracker import log_run
+
+load_dotenv()
 
 def train():
-    df = load_transformed_data()  # load transformed data from mysql
-    X, y = preprocess(df)  # apply scaling, feature selection and SMOTE
 
-    # split into 80% train and 20% test
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # load transformed data
+    df = load_transformed_data()
 
-    # train random forest model
-    rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
-    rf_model.fit(X_train, y_train)  # fit on training data
-    rf_acc = accuracy_score(y_test, rf_model.predict(X_test))  # evaluate accuracy
-    print(f"Random Forest Accuracy: {rf_acc:.4f}")  # log accuracy
+    # preprocess data
+    X, y = preprocess(df)
 
-    # train xgboost model
-    xgb_model = XGBClassifier(n_estimators=100, random_state=42, eval_metric='logloss')
-    xgb_model.fit(X_train, y_train)  # fit on training data
-    xgb_acc = accuracy_score(y_test, xgb_model.predict(X_test))  # evaluate accuracy
-    print(f"XGBoost Accuracy: {xgb_acc:.4f}")  # log accuracy
+    # split data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=42
+    )
 
-    # select best model based on accuracy
+    # Random Forest
+    rf_model = RandomForestClassifier(
+        n_estimators=100,
+        random_state=42
+    )
+
+    rf_model.fit(X_train, y_train)
+
+    rf_acc = accuracy_score(
+        y_test,
+        rf_model.predict(X_test)
+    )
+
+    print(f"Random Forest Accuracy: {rf_acc:.4f}")
+
+    # XGBoost
+    xgb_model = XGBClassifier(
+        n_estimators=100,
+        random_state=42,
+        eval_metric='logloss'
+    )
+
+    xgb_model.fit(X_train, y_train)
+
+    xgb_acc = accuracy_score(
+        y_test,
+        xgb_model.predict(X_test)
+    )
+
+    print(f"XGBoost Accuracy: {xgb_acc:.4f}")
+
+    # choose best model
     if xgb_acc >= rf_acc:
-        best_model = xgb_model  # xgboost better or equal
+
+        best_model = xgb_model
         best_name = "XGBoost"
+
     else:
-        best_model = rf_model  # random forest better
+
+        best_model = rf_model
         best_name = "RandomForest"
 
-    print(f"Best Model: {best_name}")  # log best model name
+    print(f"Best Model: {best_name}")
 
-    # evaluate best model metrics for mlflow
-    y_pred = best_model.predict(X_test)  # predictions
-    y_prob = best_model.predict_proba(X_test)[:, 1]  # probabilities
+    # predictions
+    y_pred = best_model.predict(X_test)
 
-    acc = accuracy_score(y_test, y_pred)   # accuracy
-    pre = precision_score(y_test, y_pred)  # precision
-    rec = recall_score(y_test, y_pred)     # recall
-    f1  = f1_score(y_test, y_pred)         # f1 score
-    auc = roc_auc_score(y_test, y_prob)    # roc auc
+    y_prob = best_model.predict_proba(X_test)[:, 1]
 
-    # log all metrics and model to mlflow
-    log_run(best_model, best_name, acc, pre, rec, f1, auc)
+    # metrics
+    acc = accuracy_score(y_test, y_pred)
 
-    # save best model to disk
-    os.makedirs('./ml', exist_ok=True)  # create ml dir if not exists
+    pre = precision_score(
+        y_test,
+        y_pred,
+        zero_division=0
+    )
+
+    rec = recall_score(
+        y_test,
+        y_pred,
+        zero_division=0
+    )
+
+    f1 = f1_score(
+        y_test,
+        y_pred,
+        zero_division=0
+    )
+
+    # ROC AUC
+    if len(set(y_test)) > 1:
+
+        auc = roc_auc_score(y_test, y_prob)
+
+        print(f"ROC AUC Score: {auc:.4f}")
+
+    else:
+
+        auc = 0
+
+        print("ROC AUC Score cannot be calculated (only one class present)")
+
+    # log to mlflow
+    log_run(
+        best_model,
+        best_name,
+        acc,
+        pre,
+        rec,
+        f1,
+        auc
+    )
+
+    # save model
+    os.makedirs('./ml', exist_ok=True)
+
     with open(os.getenv('MODEL_PATH'), 'wb') as f:
-        pickle.dump(best_model, f)  # serialize model
-    print(f"Model saved to {os.getenv('MODEL_PATH')}")  # log save path
 
-    return best_model, X_test, y_test, best_name  # return for evaluate use
+        pickle.dump(best_model, f)
+
+    print(f"Model saved to {os.getenv('MODEL_PATH')}")
+
+    return best_model, X_test, y_test, best_name
+
 
 if __name__ == "__main__":
-    train()  # run training
+
+    train()
