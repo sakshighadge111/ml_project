@@ -12,9 +12,7 @@ on:
 jobs:
 
   test:
-
     name: Run Tests
-
     runs-on: ubuntu-latest
 
     services:
@@ -24,13 +22,13 @@ jobs:
 
         env:
           MYSQL_ROOT_PASSWORD: root
-          MYSQL_DATABASE: shopper_db1
+          MYSQL_DATABASE: shoppers_db
 
         ports:
           - 3306:3306
 
         options: >-
-          --health-cmd="mysqladmin ping --silent"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -39,7 +37,6 @@ jobs:
         image: postgres:15
 
         env:
-          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: 1234
           POSTGRES_DB: shoppers_warehouse
 
@@ -59,6 +56,7 @@ jobs:
 
       - name: Setup Python
         uses: actions/setup-python@v5
+
         with:
           python-version: "3.11"
 
@@ -67,53 +65,49 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Create ML Directory
-        run: mkdir -p ml
-
       - name: Run ETL and Train Model
 
         env:
-          DB_HOST: 127.0.0.1
+          DB_HOST: localhost
           DB_PORT: 3306
           DB_USER: root
           DB_PASSWORD: root
-          DB_NAME: shopper_db1
+          DB_NAME: shoppers_db
 
-          PG_HOST: 127.0.0.1
+          PG_HOST: localhost
           PG_PORT: 5432
           PG_USER: postgres
           PG_PASSWORD: 1234
           PG_NAME: shoppers_warehouse
 
-          MODEL_PATH: ./ml/best_model.pkl
+          MODEL_PATH: ./ml/model.pkl
           MLFLOW_TRACKING_URI: ./mlruns
 
         run: |
           python data/reload_data.py
           python etl/load.py
-          python ml/preprocess.py
           python ml/train.py
 
-      - name: Run API Tests
+      - name: Run Tests
 
         env:
-          DB_HOST: 127.0.0.1
+          DB_HOST: localhost
           DB_PORT: 3306
           DB_USER: root
           DB_PASSWORD: root
-          DB_NAME: shopper_db1
+          DB_NAME: shoppers_db
 
-          PG_HOST: 127.0.0.1
+          PG_HOST: localhost
           PG_PORT: 5432
           PG_USER: postgres
           PG_PASSWORD: 1234
           PG_NAME: shoppers_warehouse
 
-          MODEL_PATH: ./ml/best_model.pkl
+          MODEL_PATH: ./ml/model.pkl
           MLFLOW_TRACKING_URI: ./mlruns
 
         run: |
-          python tests/test_api.py -v
+          pytest tests/test_api.py -v
 
   build-and-push:
 
@@ -141,4 +135,4 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/shoppers-ml:latest
+          tags: sakshighadgw/shoppers-ml:latest
