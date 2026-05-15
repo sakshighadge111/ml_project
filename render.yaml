@@ -13,4 +13,4 @@ services:
       - key: MLFLOW_TRACKING_URI
         value: ./mlruns  # mlflow tracking uri
       - key: MODEL_PATH
-        value: ./ml/model.pkl  # model save path
+        value: ./ml/best_model.pkl  # model save path

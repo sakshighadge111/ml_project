@@ -80,7 +80,7 @@ jobs:
           PG_PASSWORD: 1234
           PG_NAME: shoppers_warehouse
 
-          MODEL_PATH: ./ml/model.pkl
+          MODEL_PATH: ./ml/best_model.pkl 
           MLFLOW_TRACKING_URI: ./mlruns
 
         run: |
@@ -103,7 +103,7 @@ jobs:
           PG_PASSWORD: 1234
           PG_NAME: shoppers_warehouse
 
-          MODEL_PATH: ./ml/model.pkl
+          MODEL_PATH: ./ml/best_model.pkl
           MLFLOW_TRACKING_URI: ./mlruns
 
         run: |
